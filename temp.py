@@ -10,7 +10,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
 import time
-from tensorboardX import SummaryWriter
 from datasets import find_dataset_def
 from models import *
 from utils import *
@@ -60,4 +59,4 @@ with torch.no_grad():
     imgs = torch.rand((4, 3, 3, 512, 640)).cuda()
     proj_matrices = torch.rand((4, 3, 4, 4)).cuda()
     depth_values = torch.rand((4, 192)).cuda()
-    model(imgs, proj_matrices, depth_min, depth_max)
+    model(imgs, proj_matrices, depth_values)

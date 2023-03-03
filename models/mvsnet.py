@@ -75,6 +75,7 @@ class CostRegNet(nn.Module):
         x = self.prob(x)
         return x
 
+
 # 深度图边缘优化残差网络
 # 输入: [B, 4, H/4, W/4]，4是即为img有3通道，depth有1通道
 # 输出: [B, 1, H/4, W/4]，即(B, 1, 160, 128)
@@ -97,8 +98,9 @@ class MVSNet(nn.Module):
     def __init__(self, refine=True):
         super(MVSNet, self).__init__()
         self.refine = refine
-
+        # 特征提取网络
         self.feature = FeatureNet()
+        # 代价体正则化网络
         self.cost_regularization = CostRegNet()
         # 深度图边缘优化残差网络
         if self.refine:

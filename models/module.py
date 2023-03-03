@@ -173,8 +173,7 @@ def homo_warping(src_fea, src_proj, ref_proj, depth_values):
         grid = proj_xy
     # 根据变化后的坐标在源特征图检索对应的值，即为变化后的值
     # warped_src_fea: Size([4, 32, 24576, 160])
-    warped_src_fea = F.grid_sample(src_fea, grid.view(batch, num_depth * height, width, 2), mode='bilinear',
-                                   padding_mode='zeros')
+    warped_src_fea = F.grid_sample(src_fea, grid.view(batch, num_depth * height, width, 2), mode='bilinear', padding_mode='zeros')
     # 将上一步编码到height维的深度信息分离出来
     # warped_src_fea:  Size([4, 32, 192, 128, 160])
     warped_src_fea = warped_src_fea.view(batch, channels, num_depth, height, width)
@@ -200,8 +199,7 @@ if __name__ == "__main__":
     import cv2
 
     MVSDataset = find_dataset_def("dtu_yao")
-    dataset = MVSDataset("/home/xyguo/dataset/dtu_mvs/processed/mvs_training/dtu/", '../lists/dtu/train.txt', 'train',
-                         3, 256)
+    dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/train.txt', 'train', 3, 256)
     dataloader = DataLoader(dataset, batch_size=2)
     item = next(iter(dataloader))
 

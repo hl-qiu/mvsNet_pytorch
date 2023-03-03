@@ -138,16 +138,13 @@ class MVSDataset(Dataset):
 
 if __name__ == "__main__":
     # some testing code, just IGNORE it
-    dataset = MVSDataset("/home/xyguo/dataset/dtu_mvs/processed/mvs_training/dtu/", '../lists/dtu/train.txt', 'train',
-                         3, 128)
+    dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/train.txt', 'train', 3, 128)
     item = dataset[50]
 
-    dataset = MVSDataset("/home/xyguo/dataset/dtu_mvs/processed/mvs_training/dtu/", '../lists/dtu/val.txt', 'val', 3,
-                         128)
+    dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/val.txt', 'val', 3, 128)
     item = dataset[50]
 
-    dataset = MVSDataset("/home/xyguo/dataset/dtu_mvs/processed/mvs_training/dtu/", '../lists/dtu/test.txt', 'test', 5,
-                         128)
+    dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/test.txt', 'test', 5, 128)
     item = dataset[50]
 
     # test homography here

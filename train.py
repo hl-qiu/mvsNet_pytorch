@@ -6,11 +6,8 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.autograd import Variable
-import torch.nn.functional as F
-import numpy as np
+# from torch.utils.tensorboard import SummaryWriter
 import time
-from tensorboardX import SummaryWriter
 from datasets import find_dataset_def
 from models import *
 from utils import *
@@ -79,6 +76,7 @@ if args.mode == "train":
     print("current time", current_time_str)
     # 构建SummaryWriter(使用tensorboardx进行可视化)
     print("creating new summary file")
+    # logger = SummaryWriter(args.logdir)
     logger = (args.logdir)
 
 # sys.argv[]是用来获取命令行参数的，sys.argv[0]表示代码本身文件路径
@@ -88,7 +86,8 @@ print_args(args)
 
 # 构建MVSDataset和DatasetLoader
 # 训练时调用dtu_yao.py,测试时为dtu_yao_eval.py
-MVSDataset = find_dataset_def(args.dataset)
+MVSDataset = find_dataset_def(args.dataset)  # 获取MVSDataset对象
+
 train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", 3, args.numdepth, args.interval_scale)
 test_dataset = MVSDataset(args.testpath, args.testlist, "test", 5, args.numdepth, args.interval_scale)
 # drop_last (bool, optional) – 当样本数不能被batchsize整除时，最后一批数据是否舍弃（default: False)
@@ -96,7 +95,7 @@ TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_wo
 TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=4, drop_last=False)
 
 # 载入MVSNet, mvsnet_loss，优化器
-model = MVSNet(refine=False)
+model = MVSNet(refine=False)  # refine: 是否要深度图边缘优化
 # 多个GPU来加速训练
 if args.mode in ["train", "test"]:
     model = nn.DataParallel(model)

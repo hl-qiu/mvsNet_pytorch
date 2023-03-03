@@ -79,7 +79,7 @@ def save_scalars(logger, mode, scalar_dict, global_step):
     for key, value in scalar_dict.items():
         if not isinstance(value, (list, tuple)):
             name = '{}/{}'.format(mode, key)
-            logger.add_scalar(name, value, global_step)
+            # logger.add_scalar(name, value, global_step)
         else:
             for idx in range(len(value)):
                 name = '{}/{}_{}'.format(mode, key, idx)
@@ -100,11 +100,11 @@ def save_images(logger, mode, images_dict, global_step):
     for key, value in images_dict.items():
         if not isinstance(value, (list, tuple)):
             name = '{}/{}'.format(mode, key)
-            logger.add_image(name, preprocess(name, value), global_step)
+            # logger.add_image(name, preprocess(name, value), global_step)
         else:
             for idx in range(len(value)):
                 name = '{}/{}_{}'.format(mode, key, idx)
-                logger.add_image(name, preprocess(name, value[idx]), global_step)
+                # logger.add_image(name, preprocess(name, value[idx]), global_step)
 
 
 class DictAverageMeter(object):
