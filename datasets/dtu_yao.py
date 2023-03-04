@@ -4,7 +4,7 @@ import os
 from PIL import Image
 from datasets.data_io import *
 
-
+# TODO 数据集预处理
 # the DTU dataset preprocessed by Yao Yao (only for training)
 # datapath: 数据集路径
 # listfile: 数据列表(用哪些scan训练和测试都是提前定好的)
@@ -24,9 +24,11 @@ class MVSDataset(Dataset):
 
         assert self.mode in ["train", "val", "test"]
         self.metas = self.build_list()
-    # 构建训练样本条目，最终的meta数组中共用27097条数据，每个元素如下：
+
+    # TODO 构建训练样本信息
+    # 最终的meta数组中共用27097条数据，每个元素如下：
     # # scan   light_idx      ref_view          src_view
-    # # 场景    光照(0~6)  中心视点(估计它的深度)    参考视点
+    # # 场景    光照(0~6)    参考视点(估计它的深度)    源视点
     # ('scan2', 0, 0, [10, 1, 9, 12, 11, 13, 2, 8, 14, 27])
     def build_list(self):
         metas = []
@@ -39,7 +41,7 @@ class MVSDataset(Dataset):
         # scans
         for scan in scans:
             pair_file = "Cameras/pair.txt"
-            # read the pair file
+            # 读取配对文件
             with open(os.path.join(self.datapath, pair_file)) as f:
                 num_viewpoint = int(f.readline())
                 # viewpoints (49)
@@ -60,13 +62,13 @@ class MVSDataset(Dataset):
         with open(filename) as f:
             lines = f.readlines()
             lines = [line.rstrip() for line in lines]
-        # extrinsics: line [1,5), 4x4 matrix
+        # extrinsics: line [1,5), 4x4 matrix # np.fromstring把字符串分隔开成一个list，以sep=' '分割
         extrinsics = np.fromstring(' '.join(lines[1:5]), dtype=np.float32, sep=' ').reshape((4, 4))
         # intrinsics: line [7-10), 3x3 matrix
         intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ').reshape((3, 3))
         # depth_min & depth_interval: line 11
-        depth_min = float(lines[11].split()[0])
-        depth_interval = float(lines[11].split()[1]) * self.interval_scale
+        depth_min = float(lines[11].split()[0])  # 最小深度：默认425
+        depth_interval = float(lines[11].split()[1]) * self.interval_scale  # 深度间隔：默认2.5*1.06（间隔缩放因子）
         return intrinsics, extrinsics, depth_min, depth_interval
 
     # 将图像归一化到0～1(神经网络训练常用技巧，激活函数的取值范围大都是0～1，便于高效计算)
@@ -88,6 +90,7 @@ class MVSDataset(Dataset):
         meta = self.metas[idx]
         scan, light_idx, ref_view, src_views = meta
         # use only the reference view and first nviews-1 source views
+        # 一个red视图+（nviews-1）两个src视图
         view_ids = [ref_view] + src_views[:self.nviews - 1]
         # imgs: 1ref + 2src（都归一化到0-1） (3, 3, 512, 640) 3个3channel的512*640大小的图片
         imgs = []
@@ -121,13 +124,16 @@ class MVSDataset(Dataset):
             proj_matrices.append(proj_mat)
 
             if i == 0:  # reference view
+                # 获取ndepths个深度值
                 depth_values = np.arange(depth_min, depth_interval * self.ndepths + depth_min, depth_interval,
                                          dtype=np.float32)
+                # 获取.png格式深度图的mask（0-1二分值）
                 mask = self.read_img(mask_filename)
+                # 获取.pfm格式深度图的值
                 depth = self.read_depth(depth_filename)
 
         imgs = np.stack(imgs).transpose([0, 3, 1, 2])
-        proj_matrices = np.stack(proj_matrices)
+        proj_matrices = np.stack(proj_matrices)  # 未给定axis，默认按axis=0堆叠
 
         return {"imgs": imgs,
                 "proj_matrices": proj_matrices,
@@ -141,11 +147,11 @@ if __name__ == "__main__":
     dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/train.txt', 'train', 3, 128)
     item = dataset[50]
 
-    dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/val.txt', 'val', 3, 128)
-    item = dataset[50]
-
-    dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/test.txt', 'test', 5, 128)
-    item = dataset[50]
+    # dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/val.txt', 'val', 3, 128)
+    # item = dataset[50]
+    #
+    # dataset = MVSDataset("../data/mvs_training/dtu/", '../lists/dtu/test.txt', 'test', 5, 128)
+    # item = dataset[50]
 
     # test homography here
     print(item.keys())
@@ -154,36 +160,48 @@ if __name__ == "__main__":
     print("depth_values", item["depth_values"].shape)
     print("mask", item["mask"].shape)
 
+    # (3,512,640)==transpose([1,2,0])==》(512,640,3)==下采样==》(128,160,3)
     ref_img = item["imgs"][0].transpose([1, 2, 0])[::4, ::4]
-    src_imgs = [item["imgs"][i].transpose([1, 2, 0])[::4, ::4] for i in range(1, 5)]
+    src_imgs = [item["imgs"][i].transpose([1, 2, 0])[::4, ::4] for i in range(1, 3)]
+    # 投影矩阵：内参矩阵K * 外参矩阵RT 得到的
     ref_proj_mat = item["proj_matrices"][0]
-    src_proj_mats = [item["proj_matrices"][i] for i in range(1, 5)]
+    src_proj_mats = [item["proj_matrices"][i] for i in range(1, 3)]
+    # (128,160)
     mask = item["mask"]
+    # (128,160)
     depth = item["depth"]
 
     height = ref_img.shape[0]
     width = ref_img.shape[1]
     xx, yy = np.meshgrid(np.arange(0, width), np.arange(0, height))
     print("yy", yy.max(), yy.min())
-    yy = yy.reshape([-1])
-    xx = xx.reshape([-1])
-    X = np.vstack((xx, yy, np.ones_like(xx)))
-    D = depth.reshape([-1])
+    yy = yy.reshape([-1])   # 拉成一维=>(20480,)
+    xx = xx.reshape([-1])   # 拉成一维=>(20480,)
+    X = np.vstack((yy, xx, np.ones_like(xx)))   # 按列堆叠=》(3,20480)
+    D = depth.reshape([-1])   # 拉成一维=>(20480,)
     print("X", "D", X.shape, D.shape)
 
     X = np.vstack((X * D, np.ones_like(xx)))
-    X = np.matmul(np.linalg.inv(ref_proj_mat), X)
-    X = np.matmul(src_proj_mats[0], X)
-    X /= X[2]
-    X = X[:2]
+    # 得到ref图像中各坐标 在世界坐标系下的 坐标矩阵Pw == (3，20480)
+    X = np.matmul(np.linalg.inv(ref_proj_mat), X)   # 计算ref_proj_mat的逆矩阵，并与X做矩阵乘法
+    # 将坐标Pw 经src图像的投影矩阵 进行投影变换，得到深度Z 乘以 像素坐标(u,v,1)的值
+    X = np.matmul(src_proj_mats[0], X)  # src的投影矩阵 乘以 坐标Pw == 深度Z 乘以 像素坐标(u,v,1)的值 == (3，20480)
+    # 得到相机坐标系下的 归一化坐标
+    X /= X[2]   # 除以第三维的坐标Z
+    # 得到像素坐标 == (2,20480)
+    X = X[:2]   # 去除坐标中第三维的信息
 
-    yy = X[0].reshape([height, width]).astype(np.float32)
-    xx = X[1].reshape([height, width]).astype(np.float32)
+    # 横坐标数组
+    xx = X[0].reshape([height, width]).astype(np.float32)
+    # 纵坐标数组
+    yy = X[1].reshape([height, width]).astype(np.float32)
+
     import cv2
-
+    # 通过得到的坐标，获取src图像中对应坐标位置的像素，warped:[128,160,3]
     warped = cv2.remap(src_imgs[0], yy, xx, interpolation=cv2.INTER_LINEAR)
-    warped[mask[:, :] < 0.5] = 0
+    # 将mask:[128,160]
+    warped[mask[:, :] < 0.5] = 0    # 保留warped中对应mask0-1二值图中值为1的位置，其余位置置为0，rgb(0,0,0)表示黑色
 
-    cv2.imwrite('../tmp0.png', ref_img[:, :, ::-1] * 255)
-    cv2.imwrite('../tmp1.png', warped[:, :, ::-1] * 255)
-    cv2.imwrite('../tmp2.png', src_imgs[0][:, :, ::-1] * 255)
+    cv2.imwrite('../tmp0.png', ref_img[:, :, ::-1] * 255)   # 经过4倍下采样的 参考图像
+    cv2.imwrite('../tmp1.png', warped[:, :, ::-1] * 255)    # 在src_imgs[0]视角下推断出来的图像
+    cv2.imwrite('../tmp2.png', src_imgs[0][:, :, ::-1] * 255)   # 经过4倍下采样的 src_imgs[0]视角下的真实图像

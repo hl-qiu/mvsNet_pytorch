@@ -210,7 +210,9 @@ def test():
     print("final", avg_test_scalars)
 
 
+#
 def train_sample(sample, detailed_summary=False):
+#
     # train模式
     model.train()
     # 优化器梯度清零开始新一次的训练
