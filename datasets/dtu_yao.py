@@ -197,6 +197,7 @@ if __name__ == "__main__":
     yy = X[1].reshape([height, width]).astype(np.float32)
 
     import cv2
+
     # 通过得到的坐标，获取src图像中对应坐标位置的像素，warped:[128,160,3]
     warped = cv2.remap(src_imgs[0], yy, xx, interpolation=cv2.INTER_LINEAR)
     # 将mask:[128,160]
