@@ -47,6 +47,7 @@ class ConvBn3D(nn.Module):
         return self.bn(self.conv(x))
 
 
+# TODO 未使用
 class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride, downsample=None):
         super(BasicBlock, self).__init__()
@@ -66,6 +67,7 @@ class BasicBlock(nn.Module):
         return out
 
 
+# TODO 未使用
 class Hourglass3d(nn.Module):
     def __init__(self, channels):
         super(Hourglass3d, self).__init__()
@@ -96,9 +98,17 @@ class Hourglass3d(nn.Module):
         dconv1 = F.relu(self.dconv1(dconv2) + self.redir1(x), inplace=True)
         return dconv1
 
-# 单应性变换：将src图根据ref和src的投影矩阵，投影到ref视角下,得到特征体
+
+'''单应性变换：从参考视角到去找源视角的像素坐标对应点的计算过程，可以用单应性矩阵来描述。将src图根据ref和src的投影矩阵，投影到ref视角下,得到特征体。
+#  变换过程：已知参考视角的内外参数矩阵，深度信息，可以计算参考视角像素坐标的世界坐标系值，即将其投影到世界坐标系。
+#  再通过已知的源视角内外参数矩阵，可以投影到源视角的相机坐标系，归一化后得到源视角的像素坐标。
+最终，将在源视角对应点的特征（通道维度的所有数据）存放在参考视角的像素坐标位置处完成变换。
+'''
+
+
+#  单应性变换
 def homo_warping(src_fea, src_proj, ref_proj, depth_values):
-    # src_fea: [B, C, H, W] src图像的特征 此时的C已经是32维了
+    # src_fea: [B, C, H, W]=》(B, 32, 160, 128) src图像的特征 此时的C已经是32维了
     # src_proj: [B, 4, 4] src图像的投影矩阵
     # ref_proj: [B, 4, 4] 参考图像的投影矩阵
     # depth_values: [B, Ndepth] 深度假设范围数组
@@ -139,20 +149,20 @@ def homo_warping(src_fea, src_proj, ref_proj, depth_values):
         # 将维度变换为图像样子
         # x: ：Size([20480])
         # x: tensor([  0.,   1.,   2.,  ..., 157., 158., 159.], device='cuda:0')
-        y, x = y.view(height * width), x.view(height * width)
+        y, x = y.view(height * width), x.view(height * width)   # 拉成一维
         # .ones_like(x)：返回一个填充了标量值1的张量，其大小与x相同
         # .stack: [3, H*W]，即([3, 20480])
-        # xyz: tensor([[  0.,   1.,   2.,  ..., 157., 158., 159.],
-        #        [  0.,   0.,   0.,  ..., 127., 127., 127.],
+        # xyz: tensor([[  0.,   1.,   2.,  ..., 158., 159., ...,0., 1., 2.,  ..., 157., 158., 159],
+        #        [  0.,   0.,   0.,  ..., 0.,   0.,  1., 1., 1., ..., 127., 127., 127.],
         #        [  1.,   1.,   1.,  ...,   1.,   1.,   1.]], device='cuda:0')
         xyz = torch.stack((x, y, torch.ones_like(x)))
-        # unsqueeze先将维度变[1, 3, H*W]
-        # repeat：将batch的维度引入进来[B, 3, H*W]
-        xyz = torch.unsqueeze(xyz, 0).repeat(batch, 1, 1)
+        # unsqueeze：升维，第0维添加维度1，则[3, 20480]变为[1, 3, 20480]
+        # repeat：将原矩阵按 各维度 复制，得到[batch,3,20480]
+        xyz = torch.unsqueeze(xyz, 0).repeat(batch, 1, 1)   # 表示将xyz[1,3,20480]按0维度复制batch遍，1维度复制1遍，2维度复制1遍
         # [B, 3, H*W] 先将坐标乘以旋转矩阵
         rot_xyz = torch.matmul(rot, xyz)
         # [B, 3, Ndepth, H*W] 再引入Ndepths维度，并将深度假设值填入这个维度
-        # rot_depth_xyz: Size([4, 3, 192, 20480])
+        # rot_depth_xyz: Size([B, 3, 192, 20480])
         # depth_values.view(batch, 1, num_depth,1): Size([4, 1, 192, 1])
         rot_depth_xyz = rot_xyz.unsqueeze(2).repeat(1, 1, num_depth, 1) * depth_values.view(batch, 1, num_depth, 1)
         # 旋转变换后的矩阵+平移矩阵 -> 投影变换后的坐标
@@ -172,14 +182,16 @@ def homo_warping(src_fea, src_proj, ref_proj, depth_values):
         proj_xy = torch.stack((proj_x_normalized, proj_y_normalized), dim=3)
         grid = proj_xy
     # 根据变化后的坐标在源特征图检索对应的值，即为变化后的值
-    # warped_src_fea: Size([4, 32, 24576, 160])
-    warped_src_fea = F.grid_sample(src_fea, grid.view(batch, num_depth * height, width, 2), mode='bilinear', padding_mode='zeros')
+    # warped_src_fea: Size([4, 3, 24576, 160])
+    warped_src_fea = F.grid_sample(src_fea, grid.view(batch, num_depth * height, width, 2), mode='bilinear',
+                                   padding_mode='zeros')
     # 将上一步编码到height维的深度信息分离出来
-    # warped_src_fea:  Size([4, 32, 192, 128, 160])
+    # warped_src_fea:  Size([4, 3, 192, 128, 160])
     warped_src_fea = warped_src_fea.view(batch, channels, num_depth, height, width)
     # 最终得到的可以理解为src特征图按照不同假设的深度值投影到ref后构建的特征体
     # [B, C, Ndepth, H, W]
     return warped_src_fea
+
 
 # 深度回归：根据之前假设的192个深度经过网络算完得到的不同概率，乘以深度假设，求得期望
 # p: probability volume [B, D, H, W]
@@ -189,6 +201,7 @@ def depth_regression(p, depth_values):
     # 最后在深度假设维度做了加法，运算后深度假设这一维度就没了，期望即为最终估计的深度图
     depth = torch.sum(p * depth_values, 1)
     return depth
+
 
 # 测试代码，忽略
 if __name__ == "__main__":
@@ -203,12 +216,14 @@ if __name__ == "__main__":
     dataloader = DataLoader(dataset, batch_size=2)
     item = next(iter(dataloader))
 
+    # 图片尺寸缩小四倍=》(1/4)H,(1/4)W
     imgs = item["imgs"][:, :, :, ::4, ::4].cuda()
     proj_matrices = item["proj_matrices"].cuda()
     mask = item["mask"].cuda()
     depth = item["depth"].cuda()
     depth_values = item["depth_values"].cuda()
 
+    # 按第一维拆开
     imgs = torch.unbind(imgs, 1)
     proj_matrices = torch.unbind(proj_matrices, 1)
     ref_img, src_imgs = imgs[0], imgs[1:]

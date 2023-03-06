@@ -120,7 +120,7 @@ class MVSDataset(Dataset):
 
             # multiply intrinsics and extrinsics to get projection matrix
             proj_mat = extrinsics.copy()
-            proj_mat[:3, :4] = np.matmul(intrinsics, proj_mat[:3, :4])
+            proj_mat[:3, :4] = np.matmul(intrinsics, proj_mat[:3, :4])  # 内参矩阵 * 外参矩阵
             proj_matrices.append(proj_mat)
 
             if i == 0:  # reference view
@@ -180,13 +180,13 @@ if __name__ == "__main__":
     X = np.vstack((yy, xx, np.ones_like(xx)))   # 按列堆叠=》(3,20480)
     D = depth.reshape([-1])   # 拉成一维=>(20480,)
     print("X", "D", X.shape, D.shape)
-
     X = np.vstack((X * D, np.ones_like(xx)))
-    # 得到ref图像中各坐标 在世界坐标系下的 坐标矩阵Pw == (3，20480)
-    X = np.matmul(np.linalg.inv(ref_proj_mat), X)   # 计算ref_proj_mat的逆矩阵，并与X做矩阵乘法
-    # 将坐标Pw 经src图像的投影矩阵 进行投影变换，得到深度Z 乘以 像素坐标(u,v,1)的值
-    X = np.matmul(src_proj_mats[0], X)  # src的投影矩阵 乘以 坐标Pw == 深度Z 乘以 像素坐标(u,v,1)的值 == (3，20480)
-    # 得到相机坐标系下的 归一化坐标
+
+    # 得到(1/Z)Pw,其中Pw为ref图像中各坐标 在世界坐标系下的 坐标矩阵 == (3，20480)
+    X = np.matmul(np.linalg.inv(ref_proj_mat), X)   # ref_proj_mat的逆 乘以 X
+    # 将(1/Z)Pw 经src图像的投影矩阵 进行投影变换，像素坐标(u,v,1)的值
+    X = np.matmul(src_proj_mats[0], X)  # src的投影矩阵 乘以 坐标(1/Z)Pw == 像素坐标(u,v,1)的值 == (3，20480)
+    # 由于(u,v,1)为计算得到的结果，故第三维不一定得到1，归一化得到相机坐标系下的 归一化坐标
     X /= X[2]   # 除以第三维的坐标Z
     # 得到像素坐标 == (2,20480)
     X = X[:2]   # 去除坐标中第三维的信息

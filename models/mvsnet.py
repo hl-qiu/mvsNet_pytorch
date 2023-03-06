@@ -11,7 +11,7 @@ class FeatureNet(nn.Module):
     def __init__(self):
         super(FeatureNet, self).__init__()
         self.inplanes = 32
-
+        # 输入通道数，输出通道数，卷积核大小，卷积步长，padding
         self.conv0 = ConvBnReLU(3, 8, 3, 1, 1)
         self.conv1 = ConvBnReLU(8, 8, 3, 1, 1)
 
@@ -117,7 +117,7 @@ class MVSNet(nn.Module):
         num_depth = depth_values.shape[1]
         num_views = len(imgs)
 
-        # step 1. 特征提取
+        # TODO step 1. 特征提取
         # 输入：每张图片[B, 3, H, W]
         # 输出：特征图[B, 32, H/4, W/4]，即为(32, 160, 128)
         features = [self.feature(img) for img in imgs]
@@ -125,7 +125,7 @@ class MVSNet(nn.Module):
         ref_feature, src_features = features[0], features[1:]
         ref_proj, src_projs = proj_matrices[0], proj_matrices[1:]
 
-        # step 2. 通过单应性变化构建代价体
+        # TODO step 2. 通过单应性变化构建代价体
         # 将ref的32维特征和ref投过来的特征图通过方差构建原始的代价体
         # ref_volume：Size([4, 32, 192, 128, 160])
         ref_volume = ref_feature.unsqueeze(2).repeat(1, 1, num_depth, 1, 1)
@@ -135,7 +135,7 @@ class MVSNet(nn.Module):
         del ref_volume
         # zip()：将对象中对应的元素打包成一个个元组，然后返回由这些元组组成的列表
         for src_fea, src_proj in zip(src_features, src_projs):
-            # 单应性变化
+            # 单应性变换 =》 [B, C, Ndepth, H, W] ==》 [4, 3, 192, 128, 160]
             warped_volume = homo_warping(src_fea, src_proj, ref_proj, depth_values)
             if self.training:
                 volume_sum = volume_sum + warped_volume
@@ -152,7 +152,7 @@ class MVSNet(nn.Module):
         # 最终的cost volume维度是[B, 32, 192, H/4, W/4]
         volume_variance = volume_sq_sum.div_(num_views).sub_(volume_sum.div_(num_views).pow_(2))
 
-        # step 3. 代价体正则化，
+        # TODO step 3. 代价体正则化，
         # 首先通过代价体正则化网络进行进一步信息聚合，最终得到的维度是[B, 1, 192, H/4, W/4]
         cost_reg = self.cost_regularization(volume_variance)
         # cost_reg = F.upsample(cost_reg, [num_depth * 4, img_height, img_width], mode='trilinear')

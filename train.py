@@ -7,6 +7,7 @@ import torch.backends.cudnn as cudnn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 # from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 import time
 from datasets import find_dataset_def
 from models import *
@@ -76,8 +77,8 @@ if args.mode == "train":
     print("current time", current_time_str)
     # 构建SummaryWriter(使用tensorboardx进行可视化)
     print("creating new summary file")
-    # logger = SummaryWriter(args.logdir)
-    logger = (args.logdir)
+    logger = SummaryWriter(args.logdir)
+    # logger = (args.logdir)
 
 # sys.argv[]是用来获取命令行参数的，sys.argv[0]表示代码本身文件路径
 # sys.argv[1:]表示从第二个参数到最后结尾
@@ -212,27 +213,30 @@ def test():
 
 #
 def train_sample(sample, detailed_summary=False):
-#
     # train模式
     model.train()
     # 优化器梯度清零开始新一次的训练
     optimizer.zero_grad()
     # 将所有Tensor类型的变量使用cuda计算
     sample_cuda = tocuda(sample)
+
     # 真实的深度图
     depth_gt = sample_cuda["depth"]
     # mask用于将没有深度的地方筛除掉，不计算loss
     mask = sample_cuda["mask"]
+
     # 输入模型计算深度图
     outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
     # MVSNet得到的深度估计图
     depth_est = outputs["depth"]
+
     # 计算估计深度和真实深度之间的损失，mask用于选取有深度值的位置，只用这些位置的深度真值计算loss
     loss = model_loss(depth_est, depth_gt, mask)
     # 反向传播，计算当前梯度；
     loss.backward()
     # 根据梯度更新网络参数
     optimizer.step()
+
     # 保存训练得到的loss
     scalar_outputs = {"loss": loss}
     # depth_est * mask：深度图估计(滤除掉本来就没有深度的位置)
