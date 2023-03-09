@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .module import *
 
+
 # 特征提取网络
 # 将3通道的rgb图像转换为32维的高维深度特征，同时图像进行了4倍下采样
 # 输入：[3, H, W]
@@ -28,6 +29,7 @@ class FeatureNet(nn.Module):
         x = self.conv4(self.conv3(self.conv2(x)))
         x = self.feature(self.conv6(self.conv5(x)))
         return x
+
 
 # 代价体正则化网络
 # 先进行3D卷积降维，再反卷积升维，过程中把每一步卷积和反卷积对应的代价体都加起来，实现跳跃连接
@@ -171,18 +173,23 @@ class MVSNet(nn.Module):
             # prob_volume_sum4：Size([4, 192, 128, 160])
             # prob_volume：Size([4, 192, 128, 160])
             # depth_index：Size([4, 1，128, 160])
-            prob_volume_sum4 = 4 * F.avg_pool3d(F.pad(prob_volume.unsqueeze(1), pad=(0, 0, 0, 0, 1, 2)), (4, 1, 1), stride=1, padding=0).squeeze(1)
-            depth_index = depth_regression(prob_volume, depth_values=torch.arange(num_depth, device=prob_volume.device, dtype=torch.float)).long()
+            prob_volume_sum4 = 4 * F.avg_pool3d(F.pad(prob_volume.unsqueeze(1), pad=(0, 0, 0, 0, 1, 2)), (4, 1, 1),
+                                                stride=1, padding=0).squeeze(1)
+            depth_index = depth_regression(prob_volume, depth_values=torch.arange(num_depth, device=prob_volume.device,
+                                                                                  dtype=torch.float)).long()
             # photometric_confidence：Size([4, 128, 160])
             photometric_confidence = torch.gather(prob_volume_sum4, 1, depth_index.unsqueeze(1)).squeeze(1)
 
-        # step 4. 深度图改进
+        # TODO step 4. 深度图改进
         # 将原图和得到的深度图合并输入至优化残差网络，输出优化后的深度图
         if not self.refine:
             return {"depth": depth, "photometric_confidence": photometric_confidence}
         else:
             refined_depth = self.refine_network(torch.cat((imgs[0], depth), 1))
-            return {"depth": depth, "refined_depth": refined_depth, "photometric_confidence": photometric_confidence}
+            # 输出：初步估计的深度图、优化后的深度图、置信度图
+            # return {"depth": depth, "refined_depth": refined_depth, "photometric_confidence": photometric_confidence}
+            return {"depth": refined_depth, "photometric_confidence": photometric_confidence}
+
 
 # 由于是有监督学习，loss就是估计的深度图和真实深度图的smoothl1
 # 唯一要注意的是，数据集中的mask终于在这发挥作用了，我们只选取mask>0.5，也就是可视化中白色的部分计算loss，只有这部分的点深度是有效的

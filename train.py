@@ -135,7 +135,7 @@ def train():
     lr_gamma = 1 / float(args.lrepochs.split(':')[1])
     # MultiStepLR是一个非常常见的学习率调整策略，它会在每个milestone时，将此前学习率乘以gamma
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=lr_gamma, last_epoch=start_epoch - 1)
-    # 对于每个epoch训练，args.epochs决定训练周期
+    # TODO 对于每个epoch训练，args.epochs决定训练周期
     for epoch_idx in range(start_epoch, args.epochs):
         print('Epoch {}:'.format(epoch_idx))
         # scheduler.step()是对lr进行调整
@@ -153,19 +153,18 @@ def train():
             # %	取模 - 返回除法的余数
             # == 比较对象是否相等，相等返回ture
             do_summary = global_step % args.summary_freq == 0
-            # train_sample(),输出训练中的信息(loss和图像信息)
+            # TODO train_sample(),输出训练中的信息(loss和图像信息)
             loss, scalar_outputs, image_outputs = train_sample(sample, detailed_summary=do_summary)
             # 记录损失
             if do_summary:
                 save_scalars(logger, 'train', scalar_outputs, global_step)
                 save_images(logger, 'train', image_outputs, global_step)
             del scalar_outputs, image_outputs
-            print(
-                'Epoch {}/{}, Iter {}/{}, train loss = {:.3f}, time = {:.3f}'.format(epoch_idx, args.epochs, batch_idx,
+            print('Epoch {}/{}, Iter {}/{}, train loss = {:.3f}, time = {:.3f}'.format(epoch_idx, args.epochs, batch_idx,
                                                                                      len(TrainImgLoader), loss,
                                                                                      time.time() - start_time))
 
-        # 每个epoch后训练完保存模型
+        # TODO 每个epoch训练完后保存模型
         # torch.save(state, dir)
         # state可以用字典，保存参数
         # 其中dir表示保存文件的绝对路径+保存文件名，如'/home/q/Desktop/modelpara.pth'
@@ -176,11 +175,12 @@ def train():
                 'optimizer': optimizer.state_dict()},
                 "{}/model_{:0>6}.ckpt".format(args.logdir, epoch_idx))
 
-        # 每轮模型训练完进行验证
+        # TODO 每轮模型训练完进行验证
         # 主要存储loss那些信息，方便计算均值输出到fulltest
         avg_test_scalars = DictAverageMeter()
         for batch_idx, sample in enumerate(TestImgLoader):
             start_time = time.time()
+
             global_step = len(TrainImgLoader) * epoch_idx + batch_idx
             do_summary = global_step % args.summary_freq == 0
             loss, scalar_outputs, image_outputs = test_sample(sample, detailed_summary=do_summary)
@@ -195,21 +195,6 @@ def train():
         save_scalars(logger, 'fulltest', avg_test_scalars.mean(), global_step)
         print("avg_test_scalars:", avg_test_scalars.mean())
         # gc.collect()
-
-
-def test():
-    avg_test_scalars = DictAverageMeter()
-    for batch_idx, sample in enumerate(TestImgLoader):
-        start_time = time.time()
-        loss, scalar_outputs, image_outputs = test_sample(sample, detailed_summary=True)
-        avg_test_scalars.update(scalar_outputs)
-        del scalar_outputs, image_outputs
-        print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx, len(TestImgLoader), loss,
-                                                                    time.time() - start_time))
-        if batch_idx % 100 == 0:
-            print("Iter {}/{}, test results = {}".format(batch_idx, len(TestImgLoader), avg_test_scalars.mean()))
-    print("final", avg_test_scalars)
-
 
 #
 def train_sample(sample, detailed_summary=False):
@@ -259,19 +244,40 @@ def train_sample(sample, detailed_summary=False):
     return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
 
 
+def test():
+    avg_test_scalars = DictAverageMeter()
+    for batch_idx, sample in enumerate(TestImgLoader):
+        start_time = time.time()
+        # 计算损失信息
+        loss, scalar_outputs, image_outputs = test_sample(sample, detailed_summary=True)
+
+        # 计算误差均值
+        avg_test_scalars.update(scalar_outputs)
+        del scalar_outputs, image_outputs   # 删除无用变量，数据并未删除
+        print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx, len(TestImgLoader), loss,
+                                                                    time.time() - start_time))
+        # 每隔100次，输出一次信息
+        if batch_idx % 100 == 0:
+            print("Iter {}/{}, test results = {}".format(batch_idx, len(TestImgLoader), avg_test_scalars.mean()))
+    print("final", avg_test_scalars)
+
+
+
 @make_nograd_func
 def test_sample(sample, detailed_summary=True):
     model.eval()
 
     sample_cuda = tocuda(sample)
-    depth_gt = sample_cuda["depth"]
+    depth_gt = sample_cuda["depth"] # 真实深度
     mask = sample_cuda["mask"]
-
+    # 将数据送入模型
     outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
+    # 得到估计深度图
     depth_est = outputs["depth"]
-
+    # 计算损失
     loss = model_loss(depth_est, depth_gt, mask)
 
+    # 记录损失信息
     scalar_outputs = {"loss": loss}
     image_outputs = {"depth_est": depth_est * mask, "depth_gt": sample["depth"],
                      "ref_img": sample["imgs"][:, 0],
@@ -279,6 +285,7 @@ def test_sample(sample, detailed_summary=True):
     if detailed_summary:
         image_outputs["errormap"] = (depth_est - depth_gt).abs() * mask
 
+    # 记录不同精度下的损失
     scalar_outputs["abs_depth_error"] = AbsDepthError_metrics(depth_est, depth_gt, mask > 0.5)
     scalar_outputs["thres2mm_error"] = Thres_metrics(depth_est, depth_gt, mask > 0.5, 2)
     scalar_outputs["thres4mm_error"] = Thres_metrics(depth_est, depth_gt, mask > 0.5, 4)

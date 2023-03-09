@@ -193,7 +193,7 @@ def homo_warping(src_fea, src_proj, ref_proj, depth_values):
     return warped_src_fea
 
 
-# 深度回归：根据之前假设的192个深度经过网络算完得到的不同概率，乘以深度假设，求得期望
+# 深度回归：根据之前假设的192个深度经过网络得到的不同概率，乘以深度假设，求得期望
 # p: probability volume [B, D, H, W]
 # depth_values: discrete depth values [B, D]
 def depth_regression(p, depth_values):

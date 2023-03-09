@@ -18,7 +18,8 @@ class MVSDataset(Dataset):
 
         assert self.mode == "test"
         self.metas = self.build_list()
-    #  构建视点匹配列表，最终meta长度为1078，每个元素如下，与train相比没有光照变化
+
+    #  TODO 构建视点匹配列表，最终meta长度为1078，与train相比，少了光照变化的数据
     def build_list(self):
         metas = []
         with open(self.listfile) as f:
@@ -42,7 +43,7 @@ class MVSDataset(Dataset):
     def __len__(self):
         return len(self.metas)
 
-    # 内参除4，最终生成的深度图也下采样4倍
+    # TODO 读取相机参数：内参除4，最终生成的深度图也下采样4倍
     def read_cam_file(self, filename):
         with open(filename) as f:
             lines = f.readlines()
@@ -57,16 +58,17 @@ class MVSDataset(Dataset):
         depth_min = float(lines[11].split()[0])
         depth_interval = float(lines[11].split()[1]) * self.interval_scale
         return intrinsics, extrinsics, depth_min, depth_interval
-
+    # 读取图片数据
     def read_img(self, filename):
         img = Image.open(filename)
         # scale 0~255 to 0~1
         np_img = np.array(img, dtype=np.float32) / 255.
-        assert np_img.shape[:2] == (1200, 1600)
-        # crop to (1184, 1600),裁掉下方的16个像素，图像尺寸变为1184*1600，裁剪后不需要修改内存
+        # assert np_img.shape[:2] == (1200, 1600)
+        # assert np_img.shape[:2] == (756, 1008)
+        # crop to (1184, 1600),裁掉下方的16个像素，图像尺寸变为1184*1600，裁剪后不需要修改内参
         np_img = np_img[:-16, :]  # do not need to modify intrinsics if cropping the bottom part
         return np_img
-
+    # 读取img的深度图信息
     def read_depth(self, filename):
         # read pfm depth file
         return np.array(read_pfm(filename)[0], dtype=np.float32)
@@ -90,8 +92,9 @@ class MVSDataset(Dataset):
             img_filename = os.path.join(self.datapath, '{}/images/{:0>8}.jpg'.format(scan, vid))
 
             proj_mat_filename = os.path.join(self.datapath, '{}/cams/{:0>8}_cam.txt'.format(scan, vid))
-
+            # 将图片读取进来
             imgs.append(self.read_img(img_filename))
+            # 读取相机参数文件，包括：内参、外参、深度最小值、深度间隔
             intrinsics, extrinsics, depth_min, depth_interval = self.read_cam_file(proj_mat_filename)
 
             # multiply intrinsics and extrinsics to get projection matrix

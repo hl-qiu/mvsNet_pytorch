@@ -23,7 +23,7 @@ cudnn.benchmark = True
 
 parser = argparse.ArgumentParser(description='Predict depth, filter, and fuse. May be different from the original implementation')
 parser.add_argument('--model', default='mvsnet', help='select model')
-
+# 指定数据集预处理方法
 parser.add_argument('--dataset', default='dtu_yao_eval', help='select dataset')
 parser.add_argument('--testpath', help='testing data path')
 parser.add_argument('--testlist', help='testing scan list')
@@ -33,7 +33,7 @@ parser.add_argument('--numdepth', type=int, default=192, help='the number of dep
 parser.add_argument('--interval_scale', type=float, default=1.06, help='the depth interval scale')
 
 parser.add_argument('--loadckpt', default=None, help='load a specific checkpoint')
-parser.add_argument('--outdir', default='./outputs', help='output dir')
+parser.add_argument('--outdir', default='./self_made_out', help='output dir')
 parser.add_argument('--display', action='store_true', help='display depth images and masks')
 
 # parse arguments and check
@@ -57,7 +57,6 @@ def read_camera_parameters(filename):
     # TODO: assume the feature is 1/4 of the original image size
     intrinsics[:2, :] /= 4
     return intrinsics, extrinsics
-
 
 
 # read an image
@@ -95,40 +94,49 @@ def read_pair_file(filename):
 
 # 运行MVS模型保存深度图和置信度图
 def save_depth():
-    # 首先构建MVSDataset和Loader
+    # TODO 首先构建MVSDataset和Loader
     MVSDataset = find_dataset_def(args.dataset)
+    # 读取测试数据：imgs、内外参矩阵、初始化depth_values
     test_dataset = MVSDataset(args.testpath, args.testlist, "test", 5, args.numdepth, args.interval_scale)
-    TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=4, drop_last=False)
 
-    # model
+    # 构建Loader
+    TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=4, drop_last=True)
+
+    # TODO 构建model
     model = MVSNet(refine=False)
     model = nn.DataParallel(model)
     model.cuda()
 
-    # 加载模型参数
+    # TODO 加载模型参数
     print("loading model {}".format(args.loadckpt))
+    # step1：加载torch.save()保存的模型参数文件
     state_dict = torch.load(args.loadckpt)
+    # step2：将参数加载到模型中
     model.load_state_dict(state_dict['model'])
+    # 作用：不启用 BatchNormalization 和 Dropout，保证BN和dropout不发生变化，
+    # pytorch框架会自动把BN和Dropout固定住，不会取平均，而是使用训练好的值。避免一旦test时的batch_size过小，被BN层影响结果。
     model.eval()
 
     with torch.no_grad():
         for batch_idx, sample in enumerate(TestImgLoader):
             sample_cuda = tocuda(sample)
             # 输入：1ref + 4src，每个视点的投影矩阵，深度假设list
-            outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
             # 输出：深度图，置信度图
-            # 深度图里的数据都是668.08545, 559.7229这类的真实物理距离
+            # 深度图里的数据都是668.08545, 559.7229这类的物理距离
             # 置信度里的数据是0～1之间的小数
-            outputs = tensor2numpy(outputs)
+            outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
+            outputs = tensor2numpy(outputs)  # tensor转为numpy
             del sample_cuda
+
             print('Iter {}/{}'.format(batch_idx, len(TestImgLoader)))
             filenames = sample["filename"]
 
-            # 保存深度图和置信度图，将模型输出的两张图分别保存成pfm
+            # 保存深度图和置信度图：将模型输出的两张图保存成pfm格式文件
             for filename, depth_est, photometric_confidence in zip(filenames, outputs["depth"],
                                                                    outputs["photometric_confidence"]):
                 depth_filename = os.path.join(args.outdir, filename.format('depth_est', '.pfm'))
                 confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
+
                 os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
                 os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
                 # 保存深度图
@@ -314,7 +322,11 @@ def filter_depth(scan_folder, out_folder, plyfilename):
 
 
 if __name__ == '__main__':
-    # step1. 在outputs目录中保存所有的深度图和掩码
+
+    #
+    img = cv2.imread("data/self_made/scan2/images/00000000.jpg")
+    print(np.ndarray(img).shape)
+    # TODO step1. 在outputs目录中保存所有的深度图和掩码
     save_depth()
 
     with open(args.testlist) as f:
@@ -326,5 +338,5 @@ if __name__ == '__main__':
         scan_folder = os.path.join(args.testpath, scan)
         out_folder = os.path.join(args.outdir, scan)
         print("ok")
-        # step2. 过滤保存的深度图与光度置信度图和进行几何约束
+        # TODO step2. 过滤保存的深度图与光度置信度图和进行几何约束
         filter_depth(scan_folder, out_folder, os.path.join(args.outdir, 'mvsnet{:0>3}_l3.ply'.format(scan_id)))
