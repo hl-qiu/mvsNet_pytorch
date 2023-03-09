@@ -21,7 +21,8 @@ from PIL import Image
 
 cudnn.benchmark = True
 
-parser = argparse.ArgumentParser(description='Predict depth, filter, and fuse. May be different from the original implementation')
+parser = argparse.ArgumentParser(
+    description='Predict depth, filter, and fuse. May be different from the original implementation')
 parser.add_argument('--model', default='mvsnet', help='select model')
 # 指定数据集预处理方法
 parser.add_argument('--dataset', default='dtu_yao_eval', help='select dataset')
@@ -104,7 +105,12 @@ def save_depth():
 
     # TODO 构建model
     model = MVSNet(refine=False)
+    # if torch.cuda.device_count() > 1:  # 检查电脑是否有多块GPU
+    #     print(f"Let's use {torch.cuda.device_count()} GPUs!")
+    #     model = nn.DataParallel(model, device_ids=[0, 1, 2, 3])  # 将模型对象转变为多GPU并行运算的模型
+    # model = nn.DataParallel(model)
     model = nn.DataParallel(model)
+    # torch.cuda.set_device([0, 1])
     model.cuda()
 
     # TODO 加载模型参数
@@ -194,8 +200,12 @@ def reproject_with_depth(depth_ref, intrinsics_ref, extrinsics_ref, depth_src, i
 def check_geometric_consistency(depth_ref, intrinsics_ref, extrinsics_ref, depth_src, intrinsics_src, extrinsics_src):
     width, height = depth_ref.shape[1], depth_ref.shape[0]
     x_ref, y_ref = np.meshgrid(np.arange(0, width), np.arange(0, height))
-    depth_reprojected, x2d_reprojected, y2d_reprojected, x2d_src, y2d_src = reproject_with_depth(depth_ref, intrinsics_ref, extrinsics_ref,
-                                                     depth_src, intrinsics_src, extrinsics_src)
+    depth_reprojected, x2d_reprojected, y2d_reprojected, x2d_src, y2d_src = reproject_with_depth(depth_ref,
+                                                                                                 intrinsics_ref,
+                                                                                                 extrinsics_ref,
+                                                                                                 depth_src,
+                                                                                                 intrinsics_src,
+                                                                                                 extrinsics_src)
     # check |p_reproj-p_1| < 1
     dist = np.sqrt((x2d_reprojected - x_ref) ** 2 + (y2d_reprojected - y_ref) ** 2)
 
@@ -250,9 +260,10 @@ def filter_depth(scan_folder, out_folder, plyfilename):
             # 加载源图像的估计的深度图
             src_depth_est = read_pfm(os.path.join(out_folder, 'depth_est/{:0>8}.pfm'.format(src_view)))[0]
 
-            geo_mask, depth_reprojected, x2d_src, y2d_src = check_geometric_consistency(ref_depth_est, ref_intrinsics, ref_extrinsics,
-                                                                      src_depth_est,
-                                                                      src_intrinsics, src_extrinsics)
+            geo_mask, depth_reprojected, x2d_src, y2d_src = check_geometric_consistency(ref_depth_est, ref_intrinsics,
+                                                                                        ref_extrinsics,
+                                                                                        src_depth_est,
+                                                                                        src_intrinsics, src_extrinsics)
             geo_mask_sum += geo_mask.astype(np.int32)
             all_srcview_depth_ests.append(depth_reprojected)
             all_srcview_x.append(x2d_src)
@@ -323,9 +334,6 @@ def filter_depth(scan_folder, out_folder, plyfilename):
 
 if __name__ == '__main__':
 
-    #
-    img = cv2.imread("data/self_made/scan2/images/00000000.jpg")
-    print(np.ndarray(img).shape)
     # TODO step1. 在outputs目录中保存所有的深度图和掩码
     save_depth()
 
