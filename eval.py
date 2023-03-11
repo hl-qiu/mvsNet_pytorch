@@ -289,7 +289,8 @@ def filter_depth(scan_folder, out_folder, plyfilename):
         valid_points = final_mask
         print("valid_points", valid_points.mean())
         x, y, depth = x[valid_points], y[valid_points], depth_est_averaged[valid_points]
-        color = ref_img[1:-16:4, 1::4, :][valid_points]  # hardcoded for DTU dataset
+        # color = ref_img[1:-16:4, 1::4, :][valid_points]  # hardcoded for DTU dataset
+        color = ref_img[1::4, 1:-16:4, :][valid_points]  # hardcoded for DTU dataset
         xyz_ref = np.matmul(np.linalg.inv(ref_intrinsics),
                             np.vstack((x, y, np.ones_like(x))) * depth)
         xyz_world = np.matmul(np.linalg.inv(ref_extrinsics),
@@ -323,9 +324,6 @@ def filter_depth(scan_folder, out_folder, plyfilename):
 
 if __name__ == '__main__':
 
-    #
-    img = cv2.imread("data/self_made/scan2/images/00000000.jpg")
-    print(np.ndarray(img).shape)
     # TODO step1. 在outputs目录中保存所有的深度图和掩码
     save_depth()
 

@@ -66,7 +66,7 @@ class MVSDataset(Dataset):
         # assert np_img.shape[:2] == (1200, 1600)
         # assert np_img.shape[:2] == (756, 1008)
         # crop to (1184, 1600),裁掉下方的16个像素，图像尺寸变为1184*1600，裁剪后不需要修改内参
-        np_img = np_img[:-16, :]  # do not need to modify intrinsics if cropping the bottom part
+        np_img = np_img[:, :-16]  # do not need to modify intrinsics if cropping the bottom part
         return np_img
     # 读取img的深度图信息
     def read_depth(self, filename):
