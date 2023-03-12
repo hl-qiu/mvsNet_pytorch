@@ -160,12 +160,13 @@ class MVSNet(nn.Module):
         # cost_reg = F.upsample(cost_reg, [num_depth * 4, img_height, img_width], mode='trilinear')
         # 通过squeeze将维度为1的维度去除掉，得到[B, 192, H/4, W/4]
         cost_reg = cost_reg.squeeze(1)
-        # 通过Softmax函数，将深度维度的信息压缩为0～1之间的分布，得到概率体
+        # 通过Softmax函数，将深度维度的信息压缩为0～1之间的分布，得到概率体[B, D, H, W]
         prob_volume = F.softmax(cost_reg, dim=1)
-        # 回归得到深度图
+        # TODO step 4. 回归得到深度图depth[B, H, W]
         depth = depth_regression(prob_volume, depth_values=depth_values)
 
         with torch.no_grad():
+            # TODO step 5. 光度约束: 输入prob_volume:[B, D, H, W] -> 输出得到[B, H, W]
             # photometric confidence：用于进行光度一致性校验，最终得到跟深度图尺寸一样的置信度图：
             # 简单来说就是选取上面估计的最优深度附近的四个点，再次通过depth regression得到深度值索引，
             # 再通过gather函数从192个深度假设层中获取index对应位置的数据
@@ -177,18 +178,17 @@ class MVSNet(nn.Module):
                                                 stride=1, padding=0).squeeze(1)
             depth_index = depth_regression(prob_volume, depth_values=torch.arange(num_depth, device=prob_volume.device,
                                                                                   dtype=torch.float)).long()
-            # photometric_confidence：Size([4, 128, 160])
+            # photometric_confidence：Size([B, 128, 160])
             photometric_confidence = torch.gather(prob_volume_sum4, 1, depth_index.unsqueeze(1)).squeeze(1)
 
-        # TODO step 4. 深度图改进
-        # 将原图和得到的深度图合并输入至优化残差网络，输出优化后的深度图
-        if not self.refine:
-            return {"depth": depth, "photometric_confidence": photometric_confidence}
-        else:
+        # TODO step 6. 深度图优化: 将{原图}和上面得到的{初步深度图}合并输入至优化残差网络，输出优化后的深度图refined_depth
+        if self.refine:
             refined_depth = self.refine_network(torch.cat((imgs[0], depth), 1))
             # 输出：初步估计的深度图、优化后的深度图、置信度图
             # return {"depth": depth, "refined_depth": refined_depth, "photometric_confidence": photometric_confidence}
             return {"depth": refined_depth, "photometric_confidence": photometric_confidence}
+        else:
+            return {"depth": depth, "photometric_confidence": photometric_confidence}
 
 
 # 由于是有监督学习，loss就是估计的深度图和真实深度图的smoothl1

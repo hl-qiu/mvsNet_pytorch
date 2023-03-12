@@ -102,16 +102,15 @@ def save_depth():
 
     # 构建Loader
     TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=4, drop_last=True)
-
     # TODO 构建model
     model = MVSNet(refine=False)
     # if torch.cuda.device_count() > 1:  # 检查电脑是否有多块GPU
     #     print(f"Let's use {torch.cuda.device_count()} GPUs!")
     #     model = nn.DataParallel(model, device_ids=[0, 1, 2, 3])  # 将模型对象转变为多GPU并行运算的模型
     # model = nn.DataParallel(model)
-    model = nn.DataParallel(model)
-    # torch.cuda.set_device([0, 1])
-    model.cuda()
+    model = nn.DataParallel(model.cuda(), device_ids=[3])
+    # model = nn.DataParallel(model)
+    # model.cuda()
 
     # TODO 加载模型参数
     print("loading model {}".format(args.loadckpt))
@@ -301,7 +300,7 @@ def filter_depth(scan_folder, out_folder, plyfilename):
         print("valid_points", valid_points.mean())
         x, y, depth = x[valid_points], y[valid_points], depth_est_averaged[valid_points]
         # color = ref_img[1:-16:4, 1::4, :][valid_points]  # hardcoded for DTU dataset
-        color = ref_img[1::4, 1:-16:4, :][valid_points]  # hardcoded for DTU dataset
+        color = ref_img[1:-20:4, 1:-16:4, :][valid_points]  # hardcoded for DTU dataset
         xyz_ref = np.matmul(np.linalg.inv(ref_intrinsics),
                             np.vstack((x, y, np.ones_like(x))) * depth)
         xyz_world = np.matmul(np.linalg.inv(ref_extrinsics),
@@ -342,10 +341,11 @@ if __name__ == '__main__':
         scans = f.readlines()
         scans = [line.rstrip() for line in scans]
 
+    # TODO step2. 几何约束：过滤保存的深度图与光度置信度图
     for scan in scans:
         scan_id = int(scan[4:])
         scan_folder = os.path.join(args.testpath, scan)
         out_folder = os.path.join(args.outdir, scan)
         print("ok")
-        # TODO step2. 过滤保存的深度图与光度置信度图和进行几何约束
+        # 通过光度一致性约束和几何一致性约束过滤深度图
         filter_depth(scan_folder, out_folder, os.path.join(args.outdir, 'mvsnet{:0>3}_l3.ply'.format(scan_id)))
