@@ -269,6 +269,7 @@ def filter_depth(scan_folder, out_folder, plyfilename):
             all_srcview_y.append(y2d_src)
             all_srcview_geomask.append(geo_mask)
 
+        # 平均深度图估计
         depth_est_averaged = (sum(all_srcview_depth_ests) + ref_depth_est) / (geo_mask_sum + 1)
         # 几何掩码: 至少3个src满足上面的几何一致性校验(重投影后像素偏移 < 1 & & 深度差 < 1 %)
         geo_mask = geo_mask_sum >= 3
@@ -286,10 +287,13 @@ def filter_depth(scan_folder, out_folder, plyfilename):
         # 最终融合生成最后的点云
         if args.display:
             import cv2
-            cv2.imshow('ref_img', ref_img[:, :, ::-1])
-            cv2.imshow('ref_depth', ref_depth_est / 800)
+            cv2.imshow('ref_img', ref_img[:, :, ::-1])  # 原图
+            cv2.imshow('ref_depth', ref_depth_est / 800)    # 估计的深度图
+            # 置信度>0.8下的深度图
             cv2.imshow('ref_depth * photo_mask', ref_depth_est * photo_mask.astype(np.float32) / 800)
+            # 几何约束掩码下深度图
             cv2.imshow('ref_depth * geo_mask', ref_depth_est * geo_mask.astype(np.float32) / 800)
+            # 融合掩码下的深度图
             cv2.imshow('ref_depth * mask', ref_depth_est * final_mask.astype(np.float32) / 800)
             cv2.waitKey(0)
 
@@ -316,6 +320,7 @@ def filter_depth(scan_folder, out_folder, plyfilename):
         #     src_x = all_srcview_x[idx].astype(np.int)
         #     used_mask[src_view][src_y[src_mask], src_x[src_mask]] = True
 
+    # 融合
     vertexs = np.concatenate(vertexs, axis=0)
     vertex_colors = np.concatenate(vertex_colors, axis=0)
     vertexs = np.array([tuple(v) for v in vertexs], dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
